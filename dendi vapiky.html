@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="sk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Jednoduchá evidencia — kusy a držitelia (Admin/User + História)</title>
+  <style>
+    :root { --bg:#0b0c10; --card:#111217; --muted:#a0a4ab; --text:#eef0f3; --accent:#4da3ff; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif; background:var(--bg); color:var(--text); }
+    header { position:sticky; top:0; background:linear-gradient(180deg, rgba(17,18,23,.95), rgba(17,18,23,.65)); backdrop-filter: blur(8px); border-bottom:1px solid #1d2030; z-index:10; }
+    .wrap { max-width: 1000px; margin: 0 auto; padding: 12px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px }
+    h1 { font-size: 18px; margin: 0; letter-spacing:.2px; }
+    .row { display:flex; gap:10px; flex-wrap: wrap; align-items:center; }
+    .card { background: var(--card); border:1px solid #1c2130; border-radius: 14px; padding: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+    .mt { margin-top: 16px; }
+    .muted { color: var(--muted); font-size: 13px; }
+    input[type="text"], input[type="number"], input[type="password"], textarea, select { background:#0e1016; border:1px solid #283046; color:var(--text); padding:8px 10px; border-radius:10px; outline:none; min-width:0; }
+    button { background: #1a57a5; color:white; border:0; padding:8px 12px; border-radius: 10px; cursor: pointer; font-weight: 600; }
+    button.ghost { background: transparent; border:1px solid #283046; color: var(--text); }
+    button.warn { background:#b43b33; }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    .grid { display:grid; gap:12px; }
+    .item { border:1px solid #20283c; border-radius: 12px; overflow: hidden; }
+    .item-head { display:flex; justify-content:space-between; align-items:center; padding:12px 14px; background:#0f1220; }
+    .item-name { font-weight:700; }
+    .item-stats { font-size:13px; color:var(--muted); }
+    .slots { padding: 6px 0; }
+    .slot { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 12px; border-top:1px dashed #232a40; }
+    .slot-id { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:#a4b2ff; }
+    .slot-holder { font-weight:600; }
+    .slot .actions { display:flex; gap:8px; align-items:center; }
+    .search { flex:1; min-width:220px; }
+    .login-box { display:flex; gap:8px; align-items:center }
+    .user-badge { padding:6px 10px; border-radius:999px; border:1px solid #283046; background:#0e1016 }
+    .footer { font-size:12px; color:var(--muted); text-align:center; padding:24px 0 40px; }
+    .kbd { padding:.12rem .4rem; border-radius:6px; border:1px solid #2a3550; background:#0e1220; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; }
+    details summary { cursor:pointer; }
+    @media (max-width:640px){ .slot { flex-wrap:wrap; } .wrap{flex-direction:column;align-items:flex-start} }
+    /* Modal */
+    .modal { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.6); z-index:60 }
+    .table { width:100%; border-collapse:collapse; font-size:14px }
+    .table th, .table td { padding:8px 10px; border-bottom:1px solid #232a40; text-align:left }
+    .pill { display:inline-block; padding:.15rem .5rem; border-radius:999px; border:1px solid #2a3550; background:#0e1220; font-size:12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div style="display:flex;gap:12px;align-items:center">
+        <h1>Jednoduchá evidencia — kusy a držitelia</h1>
+        <div class="muted">(Admin/User + história zmien)</div>
+      </div>
+      <div class="row">
+        <input id="search" class="search" type="text" placeholder="Hľadať podľa názvu, slotu alebo mena…">
+        <button id="historyBtn" class="ghost" title="Zobraziť históriu">História</button>
+        <button id="exportBtn" class="ghost" title="Stiahnuť zálohu JSON">Export</button>
+        <label class="ghost" style="display:inline-flex; align-items:center; gap:8px; padding:8px 10px; border-radius:10px; background:#0e1016; border:1px solid #283046; cursor:pointer;">
+          Import
+          <input id="importFile" type="file" accept="application/json" style="display:none" />
+        </label>
+        <button id="resetBtn" class="warn" title="Vymazať všetky dáta">Reset</button>
+        <div class="login-box">
+          <div id="currentInfo" class="user-badge muted">Nie prihlásený</div>
+          <button id="loginBtn" class="ghost">Prihlásiť</button>
+          <button id="logoutBtn" class="ghost" style="display:none">Odhlásiť</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section id="adminArea" class="card" style="width:100%">
+      <h2 style="margin:0 0 8px">Pridať nový typ (len administrátor)</h2>
+      <div class="row mt">
+        <input id="newId" type="text" placeholder="id (napr. vape-1)" />
+        <input id="newName" type="text" placeholder="názov (napr. Vape Model 1)" />
+        <input id="newQty" type="number" min="1" value="1" style="width:120px" />
+        <button id="addBtn">Pridať</button>
+      </div>
+      <p class="muted mt">Administrátor môže meniť aj počty kusov a mazať typy.</p>
+    </section>
+
+    <section class="mt" style="width:100%">
+      <div id="items" class="grid"></div>
+      <p id="emptyState" class="muted" style="display:none;margin-top:12px">Zatiaľ žiadne položky. Pridaj prvý typ vyššie (admin).</p>
+    </section>
+
+    <div class="footer">Ctrl/Cmd + <span class="kbd">S</span> — rýchly export do súboru</div>
+  </main>
+
+  <!-- Login modal -->
+  <div id="loginModal" class="modal">
+    <div class="card" style="width:360px;padding:18px">
+      <h3 style="margin-top:0">Prihlásenie</h3>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <select id="roleSelect"><option value="user">Používateľ</option><option value="admin">Administrátor</option></select>
+        <input id="loginName" type="text" placeholder="meno" />
+        <input id="loginPass" type="password" placeholder="heslo" />
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
+          <button id="loginCancel" class="ghost">Zrušiť</button>
+          <button id="loginSubmit">Prihlásiť</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- History modal -->
+  <div id="historyModal" class="modal">
+    <div class="card" style="width:min(900px,92vw);max-height:86vh;overflow:auto;padding:18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+        <h3 style="margin:0">História zmien</h3>
+        <div>
+          <select id="historyFilter" class="ghost">
+            <option value="all">Všetko</option>
+            <option value="assign">Priradenia</option>
+            <option value="release">Uvoľnenia</option>
+            <option value="create">Vytvorenia typov</option>
+            <option value="updateQty">Zmeny množstva</option>
+            <option value="delete">Mazania typov</option>
+          </select>
+          <button id="historyClose" class="ghost">Zavrieť</button>
+        </div>
+      </div>
+      <div class="muted" style="margin:6px 0 12px">Záznamy obsahujú čas, používateľa, akciu a detail (typ, slot, zmena).</div>
+      <table class="table" id="historyTable">
+        <thead><tr><th>Čas</th><th>Používateľ</th><th>Akcia</th><th>Detail</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    // Demo účty — len pre lokálne použitie
+    const CREDENTIALS = [
+      { role: 'admin', name: 'Patrik', pass: 'hovno123' },
+      { role: 'user', name: 'Denis', pass: 'penis' },
+    ];
+
+    const LS_KEY = 'evidenceDataV3';
+
+    const App = {
+      state: { items: [], log: [] }, // log = [{ts, user, role, type, itemId, slotId, from, to, note}]
+      currentUser: null,
+    };
+
+    // --- Storage ---
+    function load(){
+      try{
+        const raw = localStorage.getItem(LS_KEY);
+        if(!raw) return { items: [], log: [] };
+        const parsed = JSON.parse(raw);
+        if(!parsed.items) parsed.items = [];
+        if(!Array.isArray(parsed.log)) parsed.log = [];
+        return parsed;
+      }catch(e){ console.warn(e); return { items: [], log: [] } }
+    }
+    function save(){ localStorage.setItem(LS_KEY, JSON.stringify(App.state)); }
+
+    // --- Auth ---
+    function showLogin(){ document.getElementById('loginModal').style.display='flex'; setTimeout(()=>document.getElementById('loginName').focus(),0); }
+    function hideLogin(){ document.getElementById('loginModal').style.display='none'; }
+    function login(role, name, pass){
+      const ok = CREDENTIALS.find(c => c.role === role && c.name === name && c.pass === pass);
+      if(!ok) return alert('Neplatné prihlasovacie údaje');
+      App.currentUser = { role: ok.role, name: ok.name };
+      render(); hideLogin();
+    }
+    function logout(){ App.currentUser = null; render(); }
+
+    function updateHeader(){
+      const info = document.getElementById('currentInfo');
+      const loginBtn = document.getElementById('loginBtn');
+      const logoutBtn = document.getElementById('logoutBtn');
+      if(App.currentUser){
+        info.textContent = `${App.currentUser.name} — ${App.currentUser.role}`;
+        logoutBtn.style.display='inline-block'; loginBtn.style.display='none';
+        document.getElementById('adminArea').style.display = App.currentUser.role === 'admin' ? 'block' : 'none';
+      } else {
+        info.textContent = 'Nie prihlásený';
+        logoutBtn.style.display='none'; loginBtn.style.display='inline-block';
+        document.getElementById('adminArea').style.display = 'none';
+      }
+    }
+
+    // --- Logging ---
+    function logEvent(e){
+      App.state.log.unshift({ ts: new Date().toISOString(), user: App.currentUser?App.currentUser.name:'(neprihlásený)', role: App.currentUser?App.currentUser.role:'none', ...e });
+      // limit log size
+      if(App.state.log.length > 2000) App.state.log.length = 2000;
+      save();
+    }
+
+    // --- Utilities ---
+    function el(tag, props={}, children=[]) { const e = document.createElement(tag); Object.assign(e, props); if(props.className) e.setAttribute('class', props.className); for(const c of children) e.appendChild(typeof c==='string' ? document.createTextNode(c) : c); return e; }
+    function uid(id, idx){ return `${id}#${idx}` }
+
+    // --- Actions ---
+    function addItem(id, name, quantity){
+      if(!App.currentUser || App.currentUser.role !== 'admin') return alert('Len admin môže pridávať');
+      id = (id||'').trim(); name=(name||'').trim(); quantity = parseInt(quantity,10);
+      if(!id || !name || !Number.isInteger(quantity) || quantity < 1) return alert('Vyplň id, názov a počet (>=1).');
+      if(App.state.items.find(i => i.id === id)) return alert('Položka s takým id už existuje.');
+      const slots = Array.from({length: quantity}, (_,i)=>({ slotId: uid(id,i+1), holder: null }));
+      App.state.items.push({ id, name, quantity, slots });
+      logEvent({ type:'create', itemId:id, note:`Vytvorený typ '${name}' (${quantity} ks)` });
+      save(); render();
+    }
+    function assignHolder(itemId, slotId, holder){
+      if(!App.currentUser) return alert('Prihlás sa');
+      const it = App.state.items.find(i=>i.id===itemId); if(!it) return;
+      const s = it.slots.find(s=>s.slotId===slotId); if(!s) return;
+      holder = (holder||'').trim(); if(!holder) return alert('Zadaj meno.');
+      if(s.holder) return alert('Tento slot je už obsadený');
+      s.holder = holder;
+      logEvent({ type:'assign', itemId, slotId, to: holder });
+      save(); render();
+    }
+    function releaseHolder(itemId, slotId){
+      if(!App.currentUser) return alert('Prihlás sa');
+      const it = App.state.items.find(i=>i.id===itemId); if(!it) return;
+      const s = it.slots.find(s=>s.slotId===slotId); if(!s) return;
+      const prev = s.holder; s.holder = null;
+      logEvent({ type:'release', itemId, slotId, from: prev||'' });
+      save(); render();
+    }
+    function updateQuantity(itemId, newQ){
+      if(!App.currentUser || App.currentUser.role !== 'admin') return alert('Iba admin môže meniť množstvo.');
+      newQ = parseInt(newQ,10); if(!Number.isInteger(newQ) || newQ < 0) return alert('Počet musí byť celé číslo ≥ 0');
+      const it = App.state.items.find(i=>i.id===itemId); if(!it) return;
+      const curr = it.slots.length;
+      if(newQ > curr){ for(let i=curr;i<newQ;i++) it.slots.push({ slotId: uid(it.id, i+1), holder: null }); }
+      else if(newQ < curr){ const toRemove = curr - newQ; const emptyFromEnd = it.slots.slice().reverse().filter(s => !s.holder).slice(0, toRemove); if(emptyFromEnd.length < toRemove) return alert('Najprv uvoľni niektoré obsadené sloty.'); it.slots.length = newQ; }
+      it.quantity = newQ; logEvent({ type:'updateQty', itemId, note:`Nové množstvo: ${newQ}` }); save(); render();
+    }
+    function deleteItem(itemId){
+      if(!App.currentUser || App.currentUser.role !== 'admin') return alert('Iba admin môže mazať typy.');
+      const it = App.state.items.find(i=>i.id===itemId); if(!it) return;
+      if(it.slots.some(s=>!!s.holder)) return alert('Niektoré sloty sú obsadené. Najprv ich uvoľni.');
+      App.state.items = App.state.items.filter(i=>i.id!==itemId);
+      logEvent({ type:'delete', itemId, note:'Typ zmazaný' });
+      save(); render();
+    }
+
+    // --- Export/Import/Reset ---
+    function exportJSON(){ const blob = new Blob([JSON.stringify(App.state,null,2)], { type:'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `evidencia-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`; document.body.appendChild(a); a.click(); a.remove(); }
+    function importJSON(file){ const reader = new FileReader(); reader.onload = () => { try{ const parsed = JSON.parse(reader.result); if(!parsed || !Array.isArray(parsed.items)) throw new Error('Neplatný formát'); if(!Array.isArray(parsed.log)) parsed.log = []; App.state = parsed; save(); render(); }catch(e){ alert('Import zlyhal: ' + e.message); } }; reader.readAsText(file); }
+
+    // --- History UI ---
+    function openHistory(){ document.getElementById('historyModal').style.display='flex'; fillHistory(); }
+    function closeHistory(){ document.getElementById('historyModal').style.display='none'; }
+    function fillHistory(){
+      const tbody = document.querySelector('#historyTable tbody');
+      tbody.innerHTML = '';
+      const filter = document.getElementById('historyFilter').value;
+      const rows = App.state.log.filter(e => filter==='all' ? true : e.type === filter);
+      for(const e of rows){
+        const tr = document.createElement('tr');
+        const time = new Date(e.ts).toLocaleString();
+        const actionMap = {assign:'Priradenie', release:'Uvoľnenie', create:'Vytvorenie', updateQty:'Zmena množstva', delete:'Zmazanie'};
+        const detail = (()=>{
+          let t = '';
+          if(e.itemId) t += `<span class="pill">${e.itemId}${e.slotId? ' / '+e.slotId : ''}</span> `;
+          if(e.from) t += `z <strong>${e.from}</strong> `;
+          if(e.to) t += `na <strong>${e.to}</strong> `;
+          if(e.note) t += `${e.note}`;
+          return t || '';
+        })();
+        tr.innerHTML = `<td>${time}</td><td>${e.user} (${e.role})</td><td>${actionMap[e.type]||e.type}</td><td>${detail}</td>`;
+        tbody.appendChild(tr);
+      }
+    }
+
+    // --- Render ---
+    function render(){
+      updateHeader();
+      const itemsEl = document.getElementById('items'); const empty = document.getElementById('emptyState'); itemsEl.innerHTML='';
+      const term = (document.getElementById('search').value||'').toLowerCase();
+      let shown = 0;
+
+      for(const item of App.state.items){
+        const freeCount = item.slots.filter(s=>!s.holder).length;
+        const matches = !term || item.name.toLowerCase().includes(term) || item.id.toLowerCase().includes(term) || item.slots.some(s => s.slotId.toLowerCase().includes(term) || (s.holder||'').toLowerCase().includes(term));
+        if(!matches) continue; shown++;
+        const head = el('div',{className:'item-head'},[
+          el('div',{className:'item-name'},[document.createTextNode(item.name)]),
+          el('div',{className:'item-stats'},[document.createTextNode(`voľné ${freeCount} / ${item.slots.length}`)])
+        ]);
+
+        const quantityRow = el('div',{className:'row', style:'padding:10px 12px; border-top:1px dashed #232a40; align-items:center'},[
+          el('div',{className:'muted'},[document.createTextNode('Počet kusov (quantity):')]),
+          (()=>{ const n = el('input',{type:'number', value:item.quantity, min:0, style:'width:120px'}); if(App.currentUser && App.currentUser.role==='admin'){ n.addEventListener('change', ()=> updateQuantity(item.id, n.value)); } else { n.disabled=true; } return n; })(),
+          el('div',{style:'flex:1'}),
+          (()=>{ const b = el('button',{className:'ghost'},[document.createTextNode('Zmazať typ')]); b.addEventListener('click', ()=>{ if(confirm('Zmazať tento typ? Povolené len ak nemá obsadené sloty.')) deleteItem(item.id); }); if(!(App.currentUser && App.currentUser.role==='admin')) b.disabled=true; return b; })(),
+        ]);
+
+        const slotsWrap = el('div',{className:'slots'});
+        for(const s of item.slots){
+          const left = el('div',{},[
+            el('span',{className:'slot-id'},[document.createTextNode(s.slotId)]),
+            document.createTextNode(' — '),
+            // Neprihlásený vidí len "voľné/obsadené"; prihlásený vidí mená
+            el('span',{className:'slot-holder', style: (!App.currentUser && s.holder)? 'color:#ffb84d' : (s.holder?'':'color:var(--muted)') },[
+              document.createTextNode(App.currentUser ? (s.holder || 'voľné') : (s.holder ? 'obsadené' : 'voľné'))
+            ])
+          ]);
+
+          const right = el('div',{className:'actions'});
+          if(App.currentUser){
+            if(!s.holder){
+              const inp = el('input',{type:'text', placeholder:'meno', style:'width:160px'});
+              const btn = el('button',{},[document.createTextNode('Priradiť')]);
+              btn.addEventListener('click', ()=> assignHolder(item.id, s.slotId, inp.value));
+              right.appendChild(inp); right.appendChild(btn);
+            } else {
+              const btn = el('button',{className:'ghost'},[document.createTextNode('Uvoľniť')]);
+              btn.addEventListener('click', ()=> releaseHolder(item.id, s.slotId));
+              right.appendChild(btn);
+            }
+          }
+
+          const slot = el('div',{className:'slot'},[ left, right ]);
+          slotsWrap.appendChild(slot);
+        }
+
+        const block = el('div',{className:'item'},[ head, quantityRow, slotsWrap ]);
+        itemsEl.appendChild(block);
+      }
+
+      empty.style.display = shown ? 'none' : 'block';
+    }
+
+    // --- Init & hooks ---
+    function init(){
+      App.state = load();
+      if(!App.state.items.length){
+        App.state.items.push({ id:'vape-1', name:'Vape Model 1', quantity:3, slots:[ {slotId:'vape-1#1', holder:null}, {slotId:'vape-1#2', holder:'Marek'}, {slotId:'vape-1#3', holder:null} ] });
+        save();
+      }
+      document.getElementById('addBtn').addEventListener('click', ()=> addItem(document.getElementById('newId').value.trim(), document.getElementById('newName').value.trim(), parseInt(document.getElementById('newQty').value)));
+      document.getElementById('search').addEventListener('input', ()=> render());
+      document.getElementById('exportBtn').addEventListener('click', exportJSON);
+      document.getElementById('importFile').addEventListener('change', (e)=>{ if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value=''; });
+      document.getElementById('resetBtn').addEventListener('click', ()=>{ if(confirm('Vymazať všetky dáta?')){ App.state={items:[], log:[]}; save(); render(); }});
+      window.addEventListener('keydown', (e)=>{ if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='s'){ e.preventDefault(); exportJSON(); }});
+
+      // Login
+      document.getElementById('loginBtn').addEventListener('click', showLogin);
+      document.getElementById('logoutBtn').addEventListener('click', ()=>{ if(confirm('Odhlásiť sa?')) logout(); });
+      document.getElementById('loginCancel').addEventListener('click', hideLogin);
+      document.getElementById('loginSubmit').addEventListener('click', ()=> login(document.getElementById('roleSelect').value, document.getElementById('loginName').value.trim(), document.getElementById('loginPass').value));
+      document.getElementById('loginModal').addEventListener('keydown', (e)=>{ if(e.key==='Enter') document.getElementById('loginSubmit').click(); });
+
+      // History
+      document.getElementById('historyBtn').addEventListener('click', openHistory);
+      document.getElementById('historyClose').addEventListener('click', closeHistory);
+      document.getElementById('historyFilter').addEventListener('change', fillHistory);
+
+      render();
+    }
+
+    init();
+  </script>
+</body>
+</html>
